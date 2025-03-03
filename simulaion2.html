@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Water Molecules with Dynamic Physical Behavior</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: #eee;
+      font-family: Arial, sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 4px;
+    }
+    #controls label {
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    #controls input[type="range"],
+    #controls input[type="number"] {
+      vertical-align: middle;
+      margin-bottom: 5px;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <div>
+      <label>Temperature: <span id="tempVal">25</span>°C</label>
+      <input type="range" id="tempSlider" min="0" max="100" value="25">
+    </div>
+    <div>
+      <label>Bond Distance: <span id="bondVal">60</span>px</label>
+      <input type="range" id="bondSlider" min="20" max="120" value="60">
+    </div>
+    <div>
+      <label>Electron Speed: <span id="electronSpeedVal">0.1</span></label>
+      <input type="range" id="electronSpeedSlider" min="0.05" max="0.5" step="0.01" value="0.1">
+    </div>
+    <div>
+      <label>Molecule Mass: <span id="massVal">1</span></label>
+      <input type="number" id="massInput" min="0.1" max="10" step="0.1" value="1">
+    </div>
+    <div>
+      <label>Repulsion Force: <span id="repulsionVal">50</span></label>
+      <input type="number" id="repulsionInput" min="10" max="200" step="10" value="50">
+    </div>
+  </div>
+  
+  <canvas id="simCanvas"></canvas>
+  
+  <script>
+    // Setup canvas and context
+    const canvas = document.getElementById("simCanvas");
+    const ctx = canvas.getContext("2d");
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    
+    // Simulation parameters (with extra controls)
+    let temperature = parseFloat(document.getElementById("tempSlider").value);
+    let bondDistance = parseFloat(document.getElementById("bondSlider").value);
+    let electronSpeed = parseFloat(document.getElementById("electronSpeedSlider").value);
+    let moleculeMass = parseFloat(document.getElementById("massInput").value);
+    let repulsionForce = parseFloat(document.getElementById("repulsionInput").value);
+    
+    // Update control displays when adjusted
+    document.getElementById("tempSlider").addEventListener("input", () => {
+      temperature = parseFloat(document.getElementById("tempSlider").value);
+      document.getElementById("tempVal").textContent = temperature;
+    });
+    document.getElementById("bondSlider").addEventListener("input", () => {
+      bondDistance = parseFloat(document.getElementById("bondSlider").value);
+      document.getElementById("bondVal").textContent = bondDistance;
+    });
+    document.getElementById("electronSpeedSlider").addEventListener("input", () => {
+      electronSpeed = parseFloat(document.getElementById("electronSpeedSlider").value);
+      document.getElementById("electronSpeedVal").textContent = electronSpeed;
+    });
+    document.getElementById("massInput").addEventListener("change", () => {
+      moleculeMass = parseFloat(document.getElementById("massInput").value);
+    });
+    document.getElementById("repulsionInput").addEventListener("change", () => {
+      repulsionForce = parseFloat(document.getElementById("repulsionInput").value);
+    });
+    
+    // Function to compute a dynamic nucleus color based on temperature.
+    // Low temperature → Blue, medium → Orange, high → Red.
+    function getNucleusColor(temp) {
+      let r, g, b;
+      if (temp < 50) {
+        let t = temp / 50;
+        r = Math.round(t * 255);
+        g = Math.round(t * 170);
+        b = Math.round((1 - t) * 255);
+      } else {
+        let t = (temp - 50) / 50;
+        r = 255;
+        g = Math.round((1 - t) * 170);
+        b = 0;
+      }
+      return `rgb(${r},${g},${b})`;
+    }
+    
+    // Molecule class: represents a water molecule with orbiting electrons.
+    // Behavior (color, movement, orbit radius) changes based on physical properties.
+    const nucleusRadius = 8;
+    class Molecule {
+      constructor(x, y, vx, vy) {
+        this.pos = { x, y };
+        this.vel = { x: vx, y: vy };
+        this.electronAngle = Math.random() * 2 * Math.PI;
+        this.mass = moleculeMass; // This can change via control input.
+      }
+      update(dt) {
+        // If temperature is high, add extra random "jitter" to simulate chaotic motion.
+        if (temperature > 75) {
+          this.vel.x += (Math.random() - 0.5) * 20 * dt;
+          this.vel.y += (Math.random() - 0.5) * 20 * dt;
+        }
+        
+        // Update position, scaling speed with temperature (simulating kinetic energy change)
+        this.pos.x += this.vel.x * dt * (temperature / 25);
+        this.pos.y += this.vel.y * dt * (temperature / 25);
+        
+        // Bounce off canvas edges
+        if (this.pos.x < nucleusRadius) {
+          this.pos.x = nucleusRadius;
+          this.vel.x *= -1;
+        }
+        if (this.pos.x > canvas.width - nucleusRadius) {
+          this.pos.x = canvas.width - nucleusRadius;
+          this.vel.x *= -1;
+        }
+        if (this.pos.y < nucleusRadius) {
+          this.pos.y = nucleusRadius;
+          this.vel.y *= -1;
+        }
+        if (this.pos.y > canvas.height - nucleusRadius) {
+          this.pos.y = canvas.height - nucleusRadius;
+          this.vel.y *= -1;
+        }
+        
+        // Update electron orbit angle based on speed and control value
+        const speed = Math.hypot(this.vel.x, this.vel.y);
+        this.electronAngle += (speed * electronSpeed) * dt;
+      }
+      draw(ctx) {
+        // Use a dynamic nucleus color that reflects the current temperature.
+        const nucleusColor = getNucleusColor(temperature);
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, nucleusRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = nucleusColor;
+        ctx.fill();
+        
+        // Let the electron orbit radius expand slightly with increased repulsion force.
+        const orbitRadius = nucleusRadius + 10 + repulsionForce / 50;
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, orbitRadius, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.stroke();
+        
+        // Draw two electrons on opposite sides of the orbit.
+        let electronX = this.pos.x + orbitRadius * Math.cos(this.electronAngle);
+        let electronY = this.pos.y + orbitRadius * Math.sin(this.electronAngle);
+        ctx.beginPath();
+        ctx.arc(electronX, electronY, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = "#00ff00";
+        ctx.fill();
+        
+        electronX = this.pos.x + orbitRadius * Math.cos(this.electronAngle + Math.PI);
+        electronY = this.pos.y + orbitRadius * Math.sin(this.electronAngle + Math.PI);
+        ctx.beginPath();
+        ctx.arc(electronX, electronY, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = "#00ff00";
+        ctx.fill();
+      }
+    }
+    
+    // Create a set of molecules (60 by default)
+    const numMolecules = 60;
+    const molecules = [];
+    for (let i = 0; i < numMolecules; i++) {
+      const x = Math.random() * (canvas.width - 2 * nucleusRadius) + nucleusRadius;
+      const y = Math.random() * (canvas.height - 2 * nucleusRadius) + nucleusRadius;
+      const vx = (Math.random() - 0.5) * 100;
+      const vy = (Math.random() - 0.5) * 100;
+      molecules.push(new Molecule(x, y, vx, vy));
+    }
+    
+    // Apply a simple repulsion force when molecules get too close
+    function applyRepulsion(dt) {
+      for (let i = 0; i < molecules.length; i++) {
+        for (let j = i + 1; j < molecules.length; j++) {
+          const a = molecules[i];
+          const b = molecules[j];
+          const dx = b.pos.x - a.pos.x;
+          const dy = b.pos.y - a.pos.y;
+          const distance = Math.hypot(dx, dy);
+          const minDist = nucleusRadius * 2;
+          if (distance < minDist && distance > 0) {
+            const force = repulsionForce / (distance * distance);
+            const fx = force * (dx / distance);
+            const fy = force * (dy / distance);
+            a.vel.x -= fx * dt / a.mass;
+            a.vel.y -= fy * dt / a.mass;
+            b.vel.x += fx * dt / b.mass;
+            b.vel.y += fy * dt / b.mass;
+          }
+        }
+      }
+    }
+    
+    // Main animation loop
+    let lastTime = performance.now();
+    function animate() {
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Update and draw each molecule
+      molecules.forEach(mol => mol.update(dt));
+      applyRepulsion(dt);
+      
+      // Draw bonds between molecules if they are within the set bond distance.
+      ctx.lineWidth = 2;
+      for (let i = 0; i < molecules.length; i++) {
+        for (let j = i + 1; j < molecules.length; j++) {
+          const dx = molecules[i].pos.x - molecules[j].pos.x;
+          const dy = molecules[i].pos.y - molecules[j].pos.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < bondDistance) {
+            ctx.beginPath();
+            ctx.moveTo(molecules[i].pos.x, molecules[i].pos.y);
+            ctx.lineTo(molecules[j].pos.x, molecules[j].pos.y);
+            const alpha = (1 - dist / bondDistance).toFixed(2);
+            ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+            ctx.stroke();
+          }
+        }
+      }
+      
+      molecules.forEach(mol => mol.draw(ctx));
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
